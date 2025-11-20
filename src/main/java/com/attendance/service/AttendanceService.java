@@ -1,10 +1,11 @@
 package com.attendance.service;
 
 import com.attendance.dto.AttendanceReportDTO;
-import com.attendance.dto.MarkRequest;
+import com.attendance.dto.DailyAttendanceRequest;
 import com.attendance.dto.NewStudentRequest;
 import com.attendance.dto.StudentDTO;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -20,17 +21,23 @@ public interface AttendanceService {
     StudentDTO addStudent(NewStudentRequest request);
     
     /**
-     * Mark attendance for a student.
-     * @param request the mark attendance request
-     * @return the updated student DTO
-     */
-    StudentDTO markAttendance(MarkRequest request);
-    
-    /**
      * Get all students in the system.
      * @return list of all student DTOs
      */
     List<StudentDTO> getAllStudents();
+    
+    /**
+     * Get attendance for a specific date.
+     * @param date the target date
+     * @return list of student DTOs for the date
+     */
+    List<StudentDTO> getAttendanceForDate(LocalDate date);
+    
+    /**
+     * Persist attendance for a specific date.
+     * @param request payload containing the date and student statuses
+     */
+    void saveDailyAttendance(DailyAttendanceRequest request);
     
     /**
      * Search for students by name.
@@ -40,8 +47,9 @@ public interface AttendanceService {
     List<StudentDTO> searchStudent(String name);
     
     /**
-     * Get attendance report with statistics.
+     * Get attendance report with statistics for a date.
+     * @param date the date to report on
      * @return attendance report DTO
      */
-    AttendanceReportDTO getAttendanceReport();
+    AttendanceReportDTO getAttendanceReport(LocalDate date);
 }

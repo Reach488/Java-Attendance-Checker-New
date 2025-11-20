@@ -1,7 +1,7 @@
 package com.attendance.controller;
 
 import com.attendance.dto.AttendanceReportDTO;
-import com.attendance.dto.MarkRequest;
+import com.attendance.dto.DailyAttendanceRequest;
 import com.attendance.dto.NewStudentRequest;
 import com.attendance.dto.StudentDTO;
 import com.attendance.service.AttendanceService;
@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 /**
@@ -57,10 +59,25 @@ public class AttendanceController {
      * @param request the mark attendance request
      * @return the updated student
      */
-    @PostMapping("/attendance/mark")
-    public ResponseEntity<StudentDTO> markAttendance(@Valid @RequestBody MarkRequest request) {
-        StudentDTO student = attendanceService.markAttendance(request);
-        return ResponseEntity.ok(student);
+    @GetMapping("/attendance/daily")
+    public ResponseEntity<List<StudentDTO>> getDailyAttendance(@RequestParam String date) {
+        try {
+            List<StudentDTO> students = attendanceService.getAttendanceForDate(LocalDate.parse(date));
+            return ResponseEntity.ok(students);
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException("Invalid date format. Use yyyy-MM-dd");
+        }
+    }
+    
+    /**
+     * Save attendance for all students on a specific date.
+     * @param request payload with date and statuses
+     * @return success response
+     */
+    @PostMapping("/attendance/save")
+    public ResponseEntity<Void> saveDailyAttendance(@Valid @RequestBody DailyAttendanceRequest request) {
+        attendanceService.saveDailyAttendance(request);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     /**
@@ -68,8 +85,18 @@ public class AttendanceController {
      * @return the attendance report
      */
     @GetMapping("/attendance/report")
-    public ResponseEntity<AttendanceReportDTO> getAttendanceReport() {
-        AttendanceReportDTO report = attendanceService.getAttendanceReport();
+    public ResponseEntity<AttendanceReportDTO> getAttendanceReport(
+            @RequestParam(value = "date", required = false) String date) {
+        LocalDate targetDate = null;
+        if (date != null && !date.isBlank()) {
+            try {
+                targetDate = LocalDate.parse(date);
+            } catch (DateTimeParseException ex) {
+                throw new IllegalArgumentException("Invalid date format. Use yyyy-MM-dd");
+            }
+        }
+        
+        AttendanceReportDTO report = attendanceService.getAttendanceReport(targetDate);
         return ResponseEntity.ok(report);
     }
 

@@ -42,7 +42,7 @@ public class StudentDTO {
         return new StudentDTO(
             student.getId(),
             student.getName(),
-            student.getStatus().name(),
+            student.getStatus() != null ? student.getStatus().name() : null,
             student.getDate()
         );
     }

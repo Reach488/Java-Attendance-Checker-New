@@ -23,7 +23,7 @@ public class CsvAttendanceStorage {
     private static final String ATTENDANCE_DIR = "attendance_data";
     private static final String FILE_PREFIX = "attendance_";
     private static final String FILE_EXTENSION = ".csv";
-    private static final String CSV_HEADER = "student_id,student_name,attendance_status";
+    private static final String CSV_HEADER = "date,student_id,student_name,attendance_status";
     private static final String CSV_DELIMITER = ",";
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     
@@ -88,6 +88,9 @@ public class CsvAttendanceStorage {
             
             // Write student records
             for (Student student : existingRecords.values()) {
+                if (student.getDate() == null) {
+                    student.setDate(date);
+                }
                 String line = formatStudentRecord(student);
                 writer.write(line);
                 writer.newLine();
@@ -229,7 +232,10 @@ public class CsvAttendanceStorage {
      * @return CSV formatted string
      */
     private String formatStudentRecord(Student student) {
-        return String.format("%d%s%s%s%s",
+        LocalDate recordDate = student.getDate() != null ? student.getDate() : LocalDate.now();
+        return String.format("%s%s%d%s%s%s%s",
+                recordDate.format(DATE_FORMATTER),
+                CSV_DELIMITER,
                 student.getId(),
                 CSV_DELIMITER,
                 escapeCSV(student.getName()),
@@ -243,24 +249,29 @@ public class CsvAttendanceStorage {
      * @param date the date for the attendance record
      * @return Student object
      */
-    private Student parseStudentRecord(String line, LocalDate date) {
+    private Student parseStudentRecord(String line, LocalDate dateFromFileName) {
         String[] parts = line.split(CSV_DELIMITER, -1);
         
         if (parts.length < 3) {
-            throw new IllegalArgumentException("Invalid CSV format: expected 3 columns, got " + parts.length);
+            throw new IllegalArgumentException("Invalid CSV format: expected at least 3 columns, got " + parts.length);
         }
         
         Student student = new Student();
         
         try {
-            student.setId(Long.parseLong(parts[0].trim()));
-            student.setName(unescapeCSV(parts[1].trim()));
-            student.setStatus(AttendanceStatus.valueOf(parts[2].trim().toUpperCase()));
-            student.setDate(date);
+            int offset = parts.length == 4 ? 1 : 0;
+            LocalDate recordDate = parts.length == 4
+                    ? LocalDate.parse(parts[0].trim(), DATE_FORMATTER)
+                    : dateFromFileName;
+            
+            student.setId(Long.parseLong(parts[offset].trim()));
+            student.setName(unescapeCSV(parts[offset + 1].trim()));
+            student.setStatus(AttendanceStatus.valueOf(parts[offset + 2].trim().toUpperCase()));
+            student.setDate(recordDate);
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid student ID: " + parts[0]);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid attendance status: " + parts[2]);
+            throw new IllegalArgumentException("Invalid attendance status: " + parts[parts.length - 1]);
         }
         
         return student;
@@ -368,5 +379,87 @@ public class CsvAttendanceStorage {
         }
         
         return false;
+    }
+    
+    /**
+     * Remove a student from attendance records for a specific date.
+     * @param date the date to remove the student from
+     * @param studentId the student ID to remove
+     * @throws IOException if file operations fail
+     */
+    public void removeStudentFromAttendance(LocalDate date, Long studentId) throws IOException {
+        String filePath = getFilePath(date);
+        File file = new File(filePath);
+        
+        if (!file.exists()) {
+            return; // No file to update
+        }
+        
+        // Read all students except the one to delete
+        List<Student> students = readAttendance(date);
+        students.removeIf(s -> s.getId().equals(studentId));
+        
+        // Rewrite the file without the deleted student
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+            // Write header
+            writer.write(CSV_HEADER);
+            writer.newLine();
+            
+            // Write remaining student records
+            for (Student student : students) {
+                String line = formatStudentRecord(student);
+                writer.write(line);
+                writer.newLine();
+            }
+            
+            writer.flush();
+            System.out.println("Removed student " + studentId + " from attendance file: " + filePath);
+        } catch (IOException e) {
+            System.err.println("Error removing student from file: " + filePath);
+            throw e;
+        }
+    }
+    
+    /**
+     * Remove a student from all attendance files.
+     * @param studentId the student ID to remove
+     * @throws IOException if file operations fail
+     */
+    public void removeStudentFromAllAttendance(Long studentId) throws IOException {
+        List<LocalDate> dates = getAvailableDates();
+        for (LocalDate date : dates) {
+            removeStudentFromAttendance(date, studentId);
+        }
+    }
+
+    /**
+     * Overwrite a day's attendance with the provided records.
+     * @param date target date
+     * @param students list of students with their statuses
+     * @throws IOException if file operations fail
+     */
+    public void writeDailyAttendance(LocalDate date, List<Student> students) throws IOException {
+        String filePath = getFilePath(date);
+        File file = new File(filePath);
+        
+        if (!file.exists()) {
+            file.createNewFile();
+        }
+        
+        students.sort(Comparator.comparing(Student::getId));
+        
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+            writer.write(CSV_HEADER);
+            writer.newLine();
+            
+            for (Student student : students) {
+                if (student.getDate() == null) {
+                    student.setDate(date);
+                }
+                writer.write(formatStudentRecord(student));
+                writer.newLine();
+            }
+            writer.flush();
+        }
     }
 }

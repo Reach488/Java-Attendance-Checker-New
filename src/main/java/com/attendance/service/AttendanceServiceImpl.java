@@ -1,7 +1,8 @@
 package com.attendance.service;
 
+import com.attendance.dto.AttendanceEntryDTO;
 import com.attendance.dto.AttendanceReportDTO;
-import com.attendance.dto.MarkRequest;
+import com.attendance.dto.DailyAttendanceRequest;
 import com.attendance.dto.NewStudentRequest;
 import com.attendance.dto.StudentDTO;
 import com.attendance.exception.NotFoundException;
@@ -13,7 +14,11 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -64,43 +69,7 @@ public class AttendanceServiceImpl implements AttendanceService {
         student.setDate(LocalDate.now());
         
         Student saved = studentStore.save(student);
-        
-        // Save to CSV file
-        try {
-            csvStorage.saveStudentAttendance(LocalDate.now(), saved);
-        } catch (IOException e) {
-            System.err.println("Error saving student to CSV: " + e.getMessage());
-        }
-        
         return StudentDTO.fromEntity(saved);
-    }
-
-    @Override
-    public StudentDTO markAttendance(MarkRequest request) {
-        Student student = studentStore.findById(request.getStudentId())
-                .orElseThrow(() -> new NotFoundException("Student not found with ID: " + request.getStudentId()));
-        
-        // Update attendance status
-        try {
-            AttendanceStatus status = AttendanceStatus.valueOf(request.getStatus().toUpperCase());
-            student.setStatus(status);
-            LocalDate attendanceDate = request.getDate() != null ? request.getDate() : LocalDate.now();
-            student.setDate(attendanceDate);
-            
-            // Save to memory
-            Student updated = studentStore.save(student);
-            
-            // Save to CSV file
-            try {
-                csvStorage.saveStudentAttendance(attendanceDate, updated);
-            } catch (IOException e) {
-                System.err.println("Error saving attendance to CSV: " + e.getMessage());
-            }
-            
-            return StudentDTO.fromEntity(updated);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid status. Must be PRESENT or ABSENT");
-        }
     }
 
     @Override
@@ -108,6 +77,89 @@ public class AttendanceServiceImpl implements AttendanceService {
         return studentStore.findAll().stream()
                 .map(StudentDTO::fromEntity)
                 .collect(Collectors.toList());
+    }
+    
+    @Override
+    public List<StudentDTO> getAttendanceForDate(LocalDate date) {
+        LocalDate targetDate = date != null ? date : LocalDate.now();
+        List<Student> baseStudents = studentStore.findAll();
+        Map<Long, Student> attendanceForDate = new HashMap<>();
+        
+        if (csvStorage.attendanceExists(targetDate)) {
+            try {
+                List<Student> attendanceStudents = csvStorage.readAttendance(targetDate);
+                for (Student record : attendanceStudents) {
+                    attendanceForDate.put(record.getId(), record);
+                }
+            } catch (IOException e) {
+                System.err.println("Error reading attendance for " + targetDate + ": " + e.getMessage());
+            }
+        }
+        
+        List<StudentDTO> result = baseStudents.stream()
+                .map(baseStudent -> {
+                    Student record = attendanceForDate.get(baseStudent.getId());
+                    String status = record != null && record.getStatus() != null
+                            ? record.getStatus().name()
+                            : null;
+                    LocalDate recordDate = record != null ? record.getDate() : targetDate;
+                    return new StudentDTO(
+                            baseStudent.getId(),
+                            baseStudent.getName(),
+                            status,
+                            recordDate
+                    );
+                })
+                .collect(Collectors.toList());
+        
+        attendanceForDate.forEach((id, record) -> {
+            boolean exists = result.stream().anyMatch(dto -> dto.getId().equals(id));
+            if (!exists) {
+                result.add(StudentDTO.fromEntity(record));
+            }
+        });
+        
+        result.sort(Comparator.comparing(StudentDTO::getId));
+        return result;
+    }
+    
+    @Override
+    public void saveDailyAttendance(DailyAttendanceRequest request) {
+        LocalDate targetDate = request.getDate() != null ? request.getDate() : LocalDate.now();
+        Map<Long, Student> roster = studentStore.findAll().stream()
+                .collect(Collectors.toMap(Student::getId, student -> student));
+        
+        List<Student> recordsToPersist = new ArrayList<>();
+        
+        for (AttendanceEntryDTO entry : request.getEntries()) {
+            Student base = roster.get(entry.getStudentId());
+            if (base == null) {
+                throw new NotFoundException("Student not found with ID: " + entry.getStudentId());
+            }
+            
+            AttendanceStatus status;
+            try {
+                status = AttendanceStatus.valueOf(entry.getStatus().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("Invalid status for student " + entry.getStudentId());
+            }
+            
+            Student record = new Student();
+            record.setId(base.getId());
+            record.setName(base.getName());
+            record.setStatus(status);
+            record.setDate(targetDate);
+            recordsToPersist.add(record);
+            
+            // keep in-memory store in sync with latest saved status
+            studentStore.save(record);
+        }
+        
+        try {
+            csvStorage.writeDailyAttendance(targetDate, recordsToPersist);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to save attendance for " + targetDate, e);
+        }
     }
 
     @Override
@@ -121,19 +173,19 @@ public class AttendanceServiceImpl implements AttendanceService {
     }
 
     @Override
-    public AttendanceReportDTO getAttendanceReport() {
-        List<Student> allStudents = studentStore.findAll();
-        long total = allStudents.size();
-        long present = allStudents.stream()
-                .filter(s -> s.getStatus() == AttendanceStatus.PRESENT)
+    public AttendanceReportDTO getAttendanceReport(LocalDate date) {
+        LocalDate targetDate = date != null ? date : LocalDate.now();
+        List<StudentDTO> dailyAttendance = getAttendanceForDate(targetDate);
+        
+        long total = dailyAttendance.size();
+        long present = dailyAttendance.stream()
+                .filter(s -> "PRESENT".equalsIgnoreCase(s.getStatus()))
                 .count();
-        long absent = total - present;
+        long absent = dailyAttendance.stream()
+                .filter(s -> "ABSENT".equalsIgnoreCase(s.getStatus()))
+                .count();
         double rate = total > 0 ? (present * 100.0 / total) : 0.0;
         
-        List<StudentDTO> studentDTOs = allStudents.stream()
-                .map(StudentDTO::fromEntity)
-                .collect(Collectors.toList());
-        
-        return new AttendanceReportDTO(total, present, absent, rate, studentDTOs);
+        return new AttendanceReportDTO(total, present, absent, rate, dailyAttendance);
     }
 }
