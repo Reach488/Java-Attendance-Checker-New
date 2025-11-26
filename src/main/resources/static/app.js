@@ -330,12 +330,17 @@ async function handleAddStudent(e) {
     }
     
     try {
+        // UPDATED: Send current selected date as creationDate so student only appears from that date forward
+        const creationDate = formatDateForInput(currentDate);
         const response = await fetch(`${API_BASE}/students`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ name })
+            body: JSON.stringify({ 
+                name: name,
+                creationDate: creationDate
+            })
         });
         
         if (response.ok) {

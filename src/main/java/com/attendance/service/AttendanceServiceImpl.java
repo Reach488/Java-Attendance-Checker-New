@@ -66,7 +66,13 @@ public class AttendanceServiceImpl implements AttendanceService {
         Student student = new Student();
         student.setName(request.getName());
         student.setStatus(AttendanceStatus.ABSENT);
-        student.setDate(LocalDate.now());
+        
+        // UPDATED: Use creation date from request, or default to today
+        LocalDate creationDate = request.getCreationDate() != null 
+                ? request.getCreationDate() 
+                : LocalDate.now();
+        student.setCreationDate(creationDate);
+        student.setDate(creationDate); // Set attendance date to creation date initially
         
         Student saved = studentStore.save(student);
         return StudentDTO.fromEntity(saved);
@@ -82,14 +88,30 @@ public class AttendanceServiceImpl implements AttendanceService {
     @Override
     public List<StudentDTO> getAttendanceForDate(LocalDate date) {
         LocalDate targetDate = date != null ? date : LocalDate.now();
-        List<Student> baseStudents = studentStore.findAll();
+        
+        // UPDATED: Filter students by creation date - only include students created on or before target date
+        List<Student> baseStudents = studentStore.findAll().stream()
+                .filter(student -> {
+                    LocalDate creationDate = student.getCreationDate() != null 
+                            ? student.getCreationDate() 
+                            : student.getDate() != null ? student.getDate() : LocalDate.now();
+                    return !creationDate.isAfter(targetDate); // creationDate <= targetDate
+                })
+                .collect(Collectors.toList());
+        
         Map<Long, Student> attendanceForDate = new HashMap<>();
         
         if (csvStorage.attendanceExists(targetDate)) {
             try {
                 List<Student> attendanceStudents = csvStorage.readAttendance(targetDate);
                 for (Student record : attendanceStudents) {
-                    attendanceForDate.put(record.getId(), record);
+                    // NEW: Also filter CSV records by creation date
+                    LocalDate recordCreationDate = record.getCreationDate() != null 
+                            ? record.getCreationDate() 
+                            : record.getDate() != null ? record.getDate() : targetDate;
+                    if (!recordCreationDate.isAfter(targetDate)) {
+                        attendanceForDate.put(record.getId(), record);
+                    }
                 }
             } catch (IOException e) {
                 System.err.println("Error reading attendance for " + targetDate + ": " + e.getMessage());
@@ -112,10 +134,16 @@ public class AttendanceServiceImpl implements AttendanceService {
                 })
                 .collect(Collectors.toList());
         
+        // UPDATED: Only add CSV records that don't exist in result and pass creation date filter
         attendanceForDate.forEach((id, record) -> {
             boolean exists = result.stream().anyMatch(dto -> dto.getId().equals(id));
             if (!exists) {
-                result.add(StudentDTO.fromEntity(record));
+                LocalDate recordCreationDate = record.getCreationDate() != null 
+                        ? record.getCreationDate() 
+                        : record.getDate() != null ? record.getDate() : targetDate;
+                if (!recordCreationDate.isAfter(targetDate)) {
+                    result.add(StudentDTO.fromEntity(record));
+                }
             }
         });
         
@@ -149,6 +177,10 @@ public class AttendanceServiceImpl implements AttendanceService {
             record.setName(base.getName());
             record.setStatus(status);
             record.setDate(targetDate);
+            // UPDATED: Preserve creation date from base student
+            record.setCreationDate(base.getCreationDate() != null 
+                    ? base.getCreationDate() 
+                    : base.getDate() != null ? base.getDate() : targetDate);
             recordsToPersist.add(record);
             
             // keep in-memory store in sync with latest saved status

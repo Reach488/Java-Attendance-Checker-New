@@ -23,7 +23,8 @@ public class CsvAttendanceStorage {
     private static final String ATTENDANCE_DIR = "attendance_data";
     private static final String FILE_PREFIX = "attendance_";
     private static final String FILE_EXTENSION = ".csv";
-    private static final String CSV_HEADER = "date,student_id,student_name,attendance_status";
+    // UPDATED: Added creation_date column to track when student was added
+    private static final String CSV_HEADER = "date,student_id,student_name,attendance_status,creation_date";
     private static final String CSV_DELIMITER = ",";
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     
@@ -233,14 +234,18 @@ public class CsvAttendanceStorage {
      */
     private String formatStudentRecord(Student student) {
         LocalDate recordDate = student.getDate() != null ? student.getDate() : LocalDate.now();
-        return String.format("%s%s%d%s%s%s%s",
+        // UPDATED: Include creation_date in CSV output
+        LocalDate creationDate = student.getCreationDate() != null ? student.getCreationDate() : recordDate;
+        return String.format("%s%s%d%s%s%s%s%s%s",
                 recordDate.format(DATE_FORMATTER),
                 CSV_DELIMITER,
                 student.getId(),
                 CSV_DELIMITER,
                 escapeCSV(student.getName()),
                 CSV_DELIMITER,
-                student.getStatus().name());
+                student.getStatus().name(),
+                CSV_DELIMITER,
+                creationDate.format(DATE_FORMATTER));
     }
     
     /**
@@ -259,8 +264,9 @@ public class CsvAttendanceStorage {
         Student student = new Student();
         
         try {
-            int offset = parts.length == 4 ? 1 : 0;
-            LocalDate recordDate = parts.length == 4
+            // UPDATED: Handle both old format (4 columns) and new format (5 columns with creation_date)
+            int offset = (parts.length == 4 || parts.length == 5) ? 1 : 0;
+            LocalDate recordDate = (parts.length == 4 || parts.length == 5)
                     ? LocalDate.parse(parts[0].trim(), DATE_FORMATTER)
                     : dateFromFileName;
             
@@ -268,6 +274,20 @@ public class CsvAttendanceStorage {
             student.setName(unescapeCSV(parts[offset + 1].trim()));
             student.setStatus(AttendanceStatus.valueOf(parts[offset + 2].trim().toUpperCase()));
             student.setDate(recordDate);
+            
+            // NEW: Parse creation_date if present (5 columns), otherwise use recordDate for backward compatibility
+            if (parts.length == 5 && !parts[offset + 3].trim().isEmpty()) {
+                try {
+                    LocalDate creationDate = LocalDate.parse(parts[offset + 3].trim(), DATE_FORMATTER);
+                    student.setCreationDate(creationDate);
+                } catch (Exception e) {
+                    // If parsing fails, fall back to recordDate
+                    student.setCreationDate(recordDate);
+                }
+            } else {
+                // Backward compatibility: use recordDate as creationDate for old CSV files
+                student.setCreationDate(recordDate);
+            }
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid student ID: " + parts[0]);
         } catch (IllegalArgumentException e) {

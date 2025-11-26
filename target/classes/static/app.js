@@ -6,6 +6,7 @@
 const API_BASE = '/api';
 let currentDate = new Date();
 let allStudents = [];
+let hasPendingChanges = false;
 
 // DOM Elements
 const addStudentForm = document.getElementById('addStudentForm');
@@ -14,12 +15,12 @@ const messageDiv = document.getElementById('message');
 const attendanceTableBody = document.getElementById('attendanceTableBody');
 const attendanceDateInput = document.getElementById('attendanceDate');
 const currentDateDisplay = document.getElementById('currentDateDisplay');
+const finishButton = document.getElementById('finishButton');
 
 // Initialize app on load
 document.addEventListener('DOMContentLoaded', () => {
     initializeDate();
     loadAllStudents();
-    loadAttendanceReport();
     setupEventListeners();
 });
 
@@ -98,26 +99,28 @@ function setupEventListeners() {
  */
 async function loadAllStudents() {
     try {
-        const response = await fetch(`${API_BASE}/students`);
+        const dateStr = formatDateForInput(currentDate);
+        const response = await fetch(`${API_BASE}/attendance/daily?date=${encodeURIComponent(dateStr)}`);
         allStudents = await response.json();
-        displayAttendanceTable(allStudents);
+        refreshTable();
+        updateSummaryFromData();
+        setPendingChanges(false);
     } catch (error) {
         showMessage('Failed to load students', 'error');
         console.error('Error:', error);
     }
 }
 
-/**
- * Load attendance report and update summary cards
- */
-async function loadAttendanceReport() {
-    try {
-        const response = await fetch(`${API_BASE}/attendance/report`);
-        const report = await response.json();
-        updateSummaryCards(report);
-    } catch (error) {
-        console.error('Error loading report:', error);
-    }
+function updateSummaryFromData() {
+    const total = allStudents.length;
+    const present = allStudents.filter(student => student.status === 'PRESENT').length;
+    const absent = allStudents.filter(student => student.status === 'ABSENT').length;
+    const rate = total > 0 ? ((present * 100) / total).toFixed(1) : '0.0';
+    
+    document.getElementById('totalStudents').textContent = total;
+    document.getElementById('presentCount').textContent = present;
+    document.getElementById('absentCount').textContent = absent;
+    document.getElementById('attendanceRate').textContent = `${rate}%`;
 }
 
 /**
@@ -134,18 +137,19 @@ function displayAttendanceTable(students) {
             <td class="student-row-id">${student.id}</td>
             <td class="student-row-name">${student.name}</td>
             <td class="status-cell">
-                <span class="status-badge ${student.status.toLowerCase()}">
-                    ${student.status}
-                </span>
+                ${student.status ? `
+                    <span class="status-badge ${student.status.toLowerCase()}">
+                        ${student.status}
+                    </span>` : '<span class="status-badge pending">UNMARKED</span>'}
             </td>
             <td>
                 <div class="action-buttons">
                     <button class="btn-quick present ${student.status === 'PRESENT' ? 'active' : ''}" 
-                            onclick="markAttendanceQuick(${student.id}, 'PRESENT', event)">
+                            onclick="setAttendanceStatus(${student.id}, 'PRESENT')">
                         Present
                     </button>
                     <button class="btn-quick absent ${student.status === 'ABSENT' ? 'active' : ''}" 
-                            onclick="markAttendanceQuick(${student.id}, 'ABSENT', event)">
+                            onclick="setAttendanceStatus(${student.id}, 'ABSENT')">
                         Absent
                     </button>
                 </div>
@@ -154,81 +158,35 @@ function displayAttendanceTable(students) {
     `).join('');
 }
 
-/**
- * Quick mark attendance for a student with auto-save
- */
-async function markAttendanceQuick(studentId, status, event) {
-    // Prevent double-clicking
-    if (event) {
-        const button = event.target;
-        if (button.disabled) return;
-        button.disabled = true;
+function refreshTable() {
+    const searchTerm = searchBox.value.trim().toLowerCase();
+    
+    if (!searchTerm) {
+        displayAttendanceTable(allStudents);
+        return;
     }
     
-    try {
-        const response = await fetch(`${API_BASE}/attendance/mark`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                studentId: studentId,
-                status: status,
-                date: formatDateForInput(currentDate)
-            })
-        });
-        
-        if (response.ok) {
-            const student = await response.json();
-            
-            // Update the row in the table immediately
-            const row = document.querySelector(`tr[data-student-id="${studentId}"]`);
-            if (row) {
-                const statusCell = row.querySelector('.status-cell');
-                const presentBtn = row.querySelector('.btn-quick.present');
-                const absentBtn = row.querySelector('.btn-quick.absent');
-                
-                // Update status badge
-                statusCell.innerHTML = `
-                    <span class="status-badge ${status.toLowerCase()}">
-                        ${status}
-                    </span>
-                `;
-                
-                // Update button states
-                presentBtn.classList.remove('active');
-                absentBtn.classList.remove('active');
-                
-                if (status === 'PRESENT') {
-                    presentBtn.classList.add('active');
-                } else {
-                    absentBtn.classList.add('active');
-                }
-            }
-            
-            // Update the student in allStudents array
-            const studentIndex = allStudents.findIndex(s => s.id === studentId);
-            if (studentIndex !== -1) {
-                allStudents[studentIndex].status = status;
-            }
-            
-            showMessage(`${student.name} marked as ${status} (Auto-saved to CSV)`, 'success');
-            loadAttendanceReport();
-        } else {
-            const error = await response.json();
-            showMessage(error.message || 'Failed to mark attendance', 'error');
-        }
-    } catch (error) {
-        showMessage('Failed to mark attendance', 'error');
-        console.error('Error:', error);
-    } finally {
-        // Re-enable button
-        if (event) {
-            setTimeout(() => {
-                event.target.disabled = false;
-            }, 500);
-        }
+    const filtered = allStudents.filter(student => 
+        student.name.toLowerCase().includes(searchTerm) ||
+        student.id.toString().includes(searchTerm)
+    );
+    
+    displayAttendanceTable(filtered);
+}
+
+/**
+ * Set attendance status locally for a student.
+ */
+function setAttendanceStatus(studentId, status) {
+    const studentIndex = allStudents.findIndex(student => student.id === studentId);
+    if (studentIndex === -1) {
+        return;
     }
+    
+    allStudents[studentIndex].status = status;
+    refreshTable();
+    updateSummaryFromData();
+    setPendingChanges(true);
 }
 
 /**
@@ -239,12 +197,15 @@ async function markAllPresent() {
         return;
     }
     
-    for (const student of allStudents) {
-        await markAttendanceQuick(student.id, 'PRESENT');
-    }
+    allStudents = allStudents.map(student => ({
+        ...student,
+        status: 'PRESENT'
+    }));
     
-    showMessage(`All students marked as PRESENT (Auto-saved to CSV)`, 'success');
-    loadAllStudents();
+    refreshTable();
+    updateSummaryFromData();
+    setPendingChanges(true);
+    showMessage(`All students marked as PRESENT`, 'success');
 }
 
 /**
@@ -255,12 +216,15 @@ async function markAllAbsent() {
         return;
     }
     
-    for (const student of allStudents) {
-        await markAttendanceQuick(student.id, 'ABSENT');
-    }
+    allStudents = allStudents.map(student => ({
+        ...student,
+        status: 'ABSENT'
+    }));
     
-    showMessage(`All students marked as ABSENT (Auto-saved to CSV)`, 'success');
-    loadAllStudents();
+    refreshTable();
+    updateSummaryFromData();
+    setPendingChanges(true);
+    showMessage(`All students marked as ABSENT`, 'success');
 }
 
 /**
@@ -272,11 +236,11 @@ async function exportCSV() {
         const dateStr = formatDateForInput(currentDate);
         
         // Prepare CSV data
-        const csvRows = ['Student ID,Student Name,Attendance Status'];
+        const csvRows = ['Student ID,Student Name,Attendance Status,Attendance Date'];
         
         // Add each student's data
         allStudents.forEach(student => {
-            const row = `${student.id},${student.name},${student.status}`;
+            const row = `${student.id},${student.name},${student.status || ''},${student.date || dateStr}`;
             csvRows.push(row);
         });
         
@@ -302,6 +266,56 @@ async function exportCSV() {
     }
 }
 
+async function finishAttendance() {
+    if (!hasPendingChanges) {
+        showMessage('No changes to save', 'info');
+        return;
+    }
+    
+    const hasUnmarked = allStudents.some(student => !student.status);
+    if (hasUnmarked) {
+        showMessage('Please mark all students before finishing.', 'error');
+        return;
+    }
+    
+    const payload = {
+        date: formatDateForInput(currentDate),
+        entries: allStudents.map(student => ({
+            studentId: student.id,
+            status: student.status
+        }))
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/attendance/save`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (response.ok) {
+            showMessage(`Attendance saved for ${currentDateDisplay.textContent}`, 'success');
+            setPendingChanges(false);
+            loadAllStudents();
+        } else {
+            const error = await response.json();
+            showMessage(error.message || 'Failed to save attendance', 'error');
+        }
+    } catch (error) {
+        showMessage('Failed to save attendance', 'error');
+        console.error('Save error:', error);
+    }
+}
+
+function setPendingChanges(state) {
+    hasPendingChanges = state;
+    if (finishButton) {
+        finishButton.disabled = !state;
+    }
+}
+
 
 /**
  * Handle add student form submission
@@ -316,12 +330,17 @@ async function handleAddStudent(e) {
     }
     
     try {
+        // UPDATED: Send current selected date as creationDate so student only appears from that date forward
+        const creationDate = formatDateForInput(currentDate);
         const response = await fetch(`${API_BASE}/students`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ name })
+            body: JSON.stringify({ 
+                name: name,
+                creationDate: creationDate
+            })
         });
         
         if (response.ok) {
@@ -329,7 +348,6 @@ async function handleAddStudent(e) {
             showMessage(`Student "${student.name}" added successfully! ID: ${student.id}`, 'success');
             addStudentForm.reset();
             loadAllStudents();
-            loadAttendanceReport();
         } else {
             const error = await response.json();
             showMessage(error.message || 'Failed to add student', 'error');
@@ -344,29 +362,7 @@ async function handleAddStudent(e) {
  * Handle search input for table filtering
  */
 async function handleSearch(e) {
-    const searchTerm = e.target.value.trim().toLowerCase();
-    
-    if (!searchTerm) {
-        displayAttendanceTable(allStudents);
-        return;
-    }
-    
-    const filtered = allStudents.filter(student => 
-        student.name.toLowerCase().includes(searchTerm) ||
-        student.id.toString().includes(searchTerm)
-    );
-    
-    displayAttendanceTable(filtered);
-}
-
-/**
- * Update summary cards with report data
- */
-function updateSummaryCards(report) {
-    document.getElementById('totalStudents').textContent = report.totalStudents;
-    document.getElementById('presentCount').textContent = report.presentCount;
-    document.getElementById('absentCount').textContent = report.absentCount;
-    document.getElementById('attendanceRate').textContent = report.attendanceRate.toFixed(1) + '%';
+    refreshTable();
 }
 
 /**

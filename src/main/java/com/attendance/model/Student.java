@@ -11,6 +11,8 @@ public class Student {
     private String name;
     private AttendanceStatus status;
     private LocalDate date;
+    // NEW: Creation date to track when the student was added to the system
+    private LocalDate creationDate;
 
     /**
      * Enumeration for student attendance status.
@@ -26,6 +28,8 @@ public class Student {
     public Student() {
         this.status = AttendanceStatus.ABSENT;
         this.date = LocalDate.now();
+        // NEW: Set creation date to today by default
+        this.creationDate = LocalDate.now();
     }
 
     /**
@@ -40,6 +44,8 @@ public class Student {
         this.name = name;
         this.status = status;
         this.date = date;
+        // NEW: Set creation date to attendance date if not specified
+        this.creationDate = date != null ? date : LocalDate.now();
     }
 
     // Getters and Setters
@@ -75,6 +81,15 @@ public class Student {
         this.date = date;
     }
 
+    // NEW: Getter and Setter for creation date
+    public LocalDate getCreationDate() {
+        return creationDate;
+    }
+
+    public void setCreationDate(LocalDate creationDate) {
+        this.creationDate = creationDate != null ? creationDate : LocalDate.now();
+    }
+
     @Override
     public String toString() {
         return "Student{" +
@@ -82,6 +97,7 @@ public class Student {
                 ", name='" + name + '\'' +
                 ", status=" + status +
                 ", date=" + date +
+                ", creationDate=" + creationDate +
                 '}';
     }
 }

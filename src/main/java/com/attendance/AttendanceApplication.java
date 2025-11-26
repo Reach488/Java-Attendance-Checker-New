@@ -39,15 +39,24 @@ public class AttendanceApplication {
             System.out.println("📚 Attendance System Starting...");
             System.out.println("========================================");
             
-            // Sample student names
+            // Sample of the student names
+//            String[] studentNames = {
+//                "John Smith", "Emma Johnson", "Michael Brown", "Sophia Davis",
+//                "James Wilson", "Olivia Martinez", "William Anderson", "Ava Taylor",
+//                "Benjamin Thomas", "Isabella Garcia", "Lucas Rodriguez", "Mia Lee",
+//                "Mason White", "Charlotte Harris", "Ethan Clark", "Amelia Lewis",
+//                "Alexander Walker", "Harper Hall", "Daniel Allen", "Evelyn Young"
+//            };
             String[] studentNames = {
-                "John Smith", "Emma Johnson", "Michael Brown", "Sophia Davis",
-                "James Wilson", "Olivia Martinez", "William Anderson", "Ava Taylor",
-                "Benjamin Thomas", "Isabella Garcia", "Lucas Rodriguez", "Mia Lee",
-                "Mason White", "Charlotte Harris", "Ethan Clark", "Amelia Lewis",
-                "Alexander Walker", "Harper Hall", "Daniel Allen", "Evelyn Young"
+                    "Lionel Messi", "Cristiano Ronaldo", "Kylian Mbappe", "Erling Haaland",
+                    "Kevin De Bruyne", "Neymar Jr", "Luka Modric", "Robert Lewandowski",
+                    "Mohamed Salah", "Virgil van Dijk", "Sergio Ramos", "Harry Kane",
+                    "Karim Benzema", "Andres Iniesta", "Lamine Yamal", "Sadio Mane",
+                    "Antoine Griezmann", "Vinicius Junior", "Harry Maguire", "Jude Bellingham"
             };
-            
+
+
+
             Random random = new Random();
             AttendanceStatus[] statuses = AttendanceStatus.values();
             
@@ -64,7 +73,7 @@ public class AttendanceApplication {
             System.out.println("========================================");
             System.out.println("🚀 Application ready!");
             System.out.println("📍 Access at: http://localhost:8080");
-            System.out.println("📡 API Base: http://localhost:8080/api");
+            System.out.println("📡 API Base: http://localhost:8080/api/students");
             System.out.println("========================================");
         };
     }
