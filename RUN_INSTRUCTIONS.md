@@ -1,6 +1,6 @@
-# 🚀 Complete Spring Boot Attendance Tracker - Ready to Run!
+# Complete Spring Boot Attendance Tracker - Ready to Run!
 
-## ✅ What's Been Created
+## What's Been Created
 
 A complete, production-ready Spring Boot application with:
 
@@ -58,7 +58,7 @@ mvn spring-boot:run
 
 ---
 
-## 🌐 Access the Application
+## Access the Application
 
 Once running, open your browser:
 
@@ -70,7 +70,7 @@ Once running, open your browser:
 
 ---
 
-## 🎯 Features Implemented
+## Features Implemented
 
 ### ✅ In-Memory Storage
 - Thread-safe `ConcurrentHashMap<Long, Student>`
@@ -192,7 +192,9 @@ Attendance/
          ├─ application.properties
          └─ static/
              ├─ index.html
+             └─ style.css
              └─ app.js
+
 ```
 
 ---
@@ -212,11 +214,11 @@ Attendance/
 ## 🎓 Student Names Preloaded
 
 The app starts with these 20 students:
-- John Smith, Emma Johnson, Michael Brown, Sophia Davis
-- James Wilson, Olivia Martinez, William Anderson, Ava Taylor
-- Benjamin Thomas, Isabella Garcia, Lucas Rodriguez, Mia Lee
-- Mason White, Charlotte Harris, Ethan Clark, Amelia Lewis
-- Alexander Walker, Harper Hall, Daniel Allen, Evelyn Young
+  "Lionel Messi", "Cristiano Ronaldo", "Kylian Mbappe", "Erling Haaland",
+  "Kevin De Bruyne", "Neymar Jr", "Luka Modric", "Robert Lewandowski",
+  "Mohamed Salah", "Virgil van Dijk", "Sergio Ramos", "Harry Kane",
+  "Karim Benzema", "Andres Iniesta", "Lamine Yamal", "Sadio Mane",
+  "Antoine Griezmann", "Vinicius Junior", "Harry Maguire", "Jude Bellingham"
 
 ---
 
@@ -242,7 +244,7 @@ brew install maven
 
 ---
 
-## 🎉 You're All Set!
+## You're All Set!
 
 Run the application:
 ```bash
@@ -251,5 +253,5 @@ mvn spring-boot:run
 
 Then open: **http://localhost:8080**
 
-Enjoy your fully functional Student Attendance Tracker! 🚀
+Enjoy your fully functional Student Attendance Tracker! 
 
