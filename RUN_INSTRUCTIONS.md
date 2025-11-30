@@ -18,9 +18,10 @@ A complete, production-ready Spring Boot application with:
 - ✅ `NotFoundException.java` - Custom exception
 - ✅ `GlobalExceptionHandler.java` - @ControllerAdvice for error handling
 
-### Frontend (HTML + JavaScript)
+### Frontend (HTML + CSS+ JavaScript)
 - ✅ `index.html` - Beautiful, responsive UI with gradient design
 - ✅ `app.js` - Fetch API integration with all endpoints
+- ✅ `style.css` 
 
 ### Configuration
 - ✅ `pom.xml` - Maven with all required dependencies
@@ -40,7 +41,7 @@ A complete, production-ready Spring Boot application with:
 
 ---
 
-## 🏃 How to Run
+## How to Run
 
 ### Option 1: Using Maven (Recommended)
 ```bash
@@ -70,7 +71,7 @@ Once running, open your browser:
 
 ---
 
-## 🎯 Features Implemented
+## Features Implemented
 
 ### ✅ In-Memory Storage
 - Thread-safe `ConcurrentHashMap<Long, Student>`
